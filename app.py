@@ -1,9 +1,12 @@
 from flask import Flask, render_template, request, send_file, json
 from pytubefix import YouTube
 from moviepy.video.io.VideoFileClip import VideoFileClip
+from moviepy.audio.io.AudioFileClip import AudioFileClip
 from io import BytesIO
-import tempfile
 import os
+
+from video_editing.clip import clip_video, clip_audio, merge_audio_video
+from lib import filter_streams, get_stream
 
 os.system("cls")
 
@@ -24,7 +27,7 @@ def info():
   title = yt.title
   thumbnail_url = yt.thumbnail_url
   length = yt.length
-  formats = list(map(lambda stream: { "itag": stream.itag, "res": stream.resolution, "type": stream.mime_type.split('/')[0] }, yt.streams.filter(type="video", mime_type="video/mp4")))
+  formats = filter_streams(yt.streams.filter(type="video", mime_type="video/mp4"))
 
   # Send json object contains video data to the browser
   return { "title": title, "thumbnail_url": thumbnail_url, "length": length,"formats": formats }
@@ -34,34 +37,29 @@ def download():
   # Get the URL of the YouTube video
   url = request.args.get('url')
   itag = request.args.get('itag')
-  start = request.args.get('start') or 0
-  end = request.args.get('end')
+  start = int(request.args.get('start') or 0)
+  end = int(request.args.get('end') or yt.length)
   
   yt = YouTube(url)
   
-  # if format == 'mp4':
-    # Download the video
   video = yt.streams.get_by_itag(itag)
-  file_stream = BytesIO()
-  video.stream_to_buffer(file_stream)
-  file_stream.seek(0)
+  file_stream = get_stream(video)
 
-  with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as temp_file:
+  if video.is_progressive and start == 0 and (end is None or end == yt.length):
+    return send_file(file_stream, as_attachment=True, download_name=f'{yt.title}.{video.mime_type.split('/').pop()}')
 
-    temp_file.write(file_stream.read())
-    temp_filename = temp_file.name
+  video_cliped = clip_video(file_stream.read(), start, end)
 
-  with VideoFileClip(temp_filename) as video_clip:
+  if not video.is_progressive:
+    audio_stream = get_stream(yt.streams.get_audio_only())
+    audio_cliped = clip_audio(audio_stream.read(), start, end)
 
-      trimmed_video = video_clip.subclip(start, end)
+  result = merge_audio_video(
+    audio_cliped,
+    video_cliped,
+  ) if not video.is_progressive else video_cliped
 
-      with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as trimmed_video_filename:
-
-        trimmed_video.write_videofile(trimmed_video_filename.name, codec="libx264")
-
-        # Send the file to the browser
-        return send_file(trimmed_video_filename.name, as_attachment=True, download_name=f'{yt.title}.{video.mime_type.split('/').pop()}')
-
+  return send_file(result, as_attachment=True, download_name=f'{yt.title}.{video.mime_type.split('/').pop()}')
 
 @app.route('/error')
 def error():
