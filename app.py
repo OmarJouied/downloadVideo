@@ -22,7 +22,6 @@ def info():
   url = request.args.get('url')
   
   yt = YouTube(url)
-  print(yt.streams)
 
   title = yt.title
   thumbnail_url = yt.thumbnail_url
