@@ -3,12 +3,9 @@ from pytubefix import YouTube
 from moviepy.video.io.VideoFileClip import VideoFileClip
 from moviepy.audio.io.AudioFileClip import AudioFileClip
 from io import BytesIO
-import os
 
 from video_editing.clip import clip_video, clip_audio, merge_audio_video
 from lib import filter_streams, get_stream
-
-os.system("cls")
 
 app = Flask(__name__)
 
@@ -21,7 +18,7 @@ def info():
   # Get the URL of the YouTube video
   url = request.args.get('url')
   
-  yt = YouTube(url)
+  yt = YouTube(url, use_po_token=True)
 
   title = yt.title
   thumbnail_url = yt.thumbnail_url
@@ -39,7 +36,7 @@ def download():
   start = int(request.args.get('start') or 0)
   end = int(request.args.get('end') or yt.length)
   
-  yt = YouTube(url)
+  yt = YouTube(url, use_po_token=True)
   
   video = yt.streams.get_by_itag(itag)
   file_stream = get_stream(video)
@@ -65,4 +62,4 @@ def error():
     return render_template('error.html', message='Please fill in all fields!')
 
 if __name__ == '__main__':
-    app.run(debug=True,host="0.0.0.0")
+    app.run(host="0.0.0.0")
